@@ -20,7 +20,7 @@ This repository provides a compact working example of those integration concerns
 - Negotiates a bidirectional WebRTC audio connection through FastRTC.
 - Resamples incoming audio to mono 16 kHz PCM for Gemini Live.
 - Streams Gemini's 24 kHz audio response back to the browser.
-- Loads a private, server-side French interview-demo prompt.
+- Loads a server-side, non-static French interview-demo system prompt.
 - Caps local WebRTC sessions at ten minutes to limit runaway demo sessions.
 - Supports local HTTP on loopback and optional local HTTPS.
 - Supports browser ICE configuration through `RTC_CONFIGURATION`.
@@ -67,7 +67,7 @@ The browser obtains its public ICE configuration from `GET /config/rtc`. Applica
 │   ├── app/
 │   │   └── agent.py              # FastAPI, FastRTC, Gemini and local launcher
 │   ├── prompts/
-│   │   └── interview_demo.txt    # Private active system prompt
+│   │   └── interview_demo.txt    # Server-side, non-static system prompt
 │   ├── static/
 │   │   ├── css/styles.css
 │   │   ├── icone/
