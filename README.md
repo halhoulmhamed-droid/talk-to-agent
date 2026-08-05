@@ -6,6 +6,10 @@ It demonstrates practical integration work across asynchronous Python, FastAPI, 
 
 > **Current scope:** local technical demo / portfolio prototype. Production deployment would require authentication, hardened session isolation, rate limiting, production TLS/TURN configuration and an explicit privacy/data-retention policy.
 
+## Demo
+
+![Talk-to-Agent real-time voice AI demo](docs/talk-to-agent-preview.png)
+
 ## The problem it explores
 
 Realtime voice applications need more than a conventional request/response API. They must coordinate microphone permissions, WebRTC signaling, continuous audio conversion, asynchronous AI sessions, low-latency playback, connection cleanup, and local security requirements.
