@@ -7,6 +7,12 @@
     --gutter: 4px;
 }
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
     padding: 0;
@@ -102,6 +108,12 @@ button:hover {
     transform: translateY(-1px);
 }
 
+button:focus-visible,
+select:focus-visible {
+    outline: 3px solid #ffffff;
+    outline-offset: 3px;
+}
+
 .icon-with-spinner {
     display: flex;
     align-items: center;
@@ -191,7 +203,35 @@ button:hover {
     align-items: center;
     padding: 20px;
     height: 12vh;
-    font: 3vw Arial, Helvetica, sans-serif;
+    font: clamp(2rem, 3vw, 3rem) Arial, Helvetica, sans-serif;
     color: #fff;
     text-shadow: 1px 1px 2px black, 0 0 25px rgb(84, 84, 199), 0 0 5px rgb(135, 40, 40);
+}
+
+.subtitle {
+    max-width: 680px;
+    margin: -1rem auto 1.5rem;
+    padding: 0 1rem;
+    color: #cbd5e1;
+}
+
+@media (max-width: 600px) {
+    body {
+        justify-content: flex-start;
+        padding: 1rem 0;
+    }
+
+    .container {
+        width: calc(100% - 2rem);
+        padding: 1.25rem;
+    }
+
+    .center {
+        height: auto;
+        padding: 1rem;
+    }
+
+    .box:nth-child(even) {
+        display: none;
+    }
 }

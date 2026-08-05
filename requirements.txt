@@ -1,4 +1,4 @@
-# Dépendances directes, versions relevées dans le .venv d'origine (Python 3.11)
+# Direct dependencies pinned for the Python 3.11 portfolio demo
 fastapi==0.136.0
 uvicorn==0.45.0
 fastrtc==0.0.34
@@ -7,4 +7,3 @@ gradio==5.50.0
 pydantic==2.12.3
 python-dotenv==1.2.2
 numpy==2.4.4
-scipy==1.17.1

@@ -6,20 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="/static/css/styles.css" rel="stylesheet">
     <link rel="icon" href="/static/icone/favicon.png" type="image/x-icon" />
-    <title>Live Interview</title>
+    <title>Talk-to-Agent — Realtime Voice Demo</title>
 </head>
 
 
 <body>
-    <!-- Add toast element after body opening tag -->
-    <div id="error-toast" class="toast"></div>
+    <div id="error-toast" class="toast" role="status" aria-live="polite"></div>
     <div style="text-align: center">
-        <h1 class="center">agent assistant</h1>
+        <h1 class="center">Talk-to-Agent</h1>
+        <p class="subtitle">Local realtime voice interview demo powered by WebRTC and Gemini Live.</p>
     </div>
     <div class="container">
         <div class="controls">
             <div class="input-group">
-                <label for="voice">Voice</label>
+                <label for="voice">Gemini voice</label>
                 <select id="voice">
                     <option value="Zephyr">Zephyr</option>
                     <option value="Charon">Charon</option>
@@ -36,7 +36,7 @@
             </div>
         </div>
 
-        <button id="start-button">Start Recording</button>
+        <button id="start-button" type="button">Start Recording</button>
     </div>
 
     <audio id="audio-output"></audio>

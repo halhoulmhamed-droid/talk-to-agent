@@ -1,27 +1,14 @@
 let peerConnection;
 let audioContext;
 let dataChannel;
-let isRecording = false;
-let webrtc_id;
+let isStarting = false;
 let isMuted = false;
 let analyser_input, dataArray_input;
 let analyser, dataArray;
 let source_input = null;
 let source_output = null;
 
-let __RTC_CONFIGURATION__ = {
-    iceServers: [
-        {
-            urls: [
-                'stun:stun.l.google.com:19302',
-                'stun:stun1.l.google.com:19302',
-            ]
-        }
-    ]
-}
-
 const startButton = document.getElementById('start-button');
-//const apiKeyInput = document.getElementById('api-key');
 const voiceSelect = document.getElementById('voice');
 const audioOutput = document.getElementById('audio-output');
 const boxContainer = document.querySelector('.box-container');
@@ -50,7 +37,7 @@ const micMutedIconSVG = `
 function updateButtonState() {
     startButton.innerHTML = '';
     startButton.onclick = null;
-    if (peerConnection && (peerConnection.connectionState === 'connecting' || peerConnection.connectionState === 'new')) {
+    if (isStarting || (peerConnection && (peerConnection.connectionState === 'connecting' || peerConnection.connectionState === 'new'))) {
         startButton.innerHTML = `
                     <div class="icon-with-spinner">
                         <div class="spinner"></div>
@@ -90,6 +77,7 @@ function showError(message) {
 }
 function toggleMute(event) {
     event.stopPropagation();
+    event.preventDefault();
     if (!peerConnection || peerConnection.connectionState !== 'connected') return;
     isMuted = !isMuted;
     console.log("Mute toggled:", isMuted);
@@ -101,23 +89,57 @@ function toggleMute(event) {
     });
     updateButtonState();
 }
+
+function createWebRTCId() {
+    if (globalThis.crypto?.randomUUID) {
+        return globalThis.crypto.randomUUID();
+    }
+
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function fetchRTCConfiguration() {
+    const response = await fetch('/config/rtc', {
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store',
+    });
+    if (!response.ok) {
+        throw new Error(`RTC configuration request failed (${response.status}).`);
+    }
+    const configuration = await response.json();
+    if (!configuration || !Array.isArray(configuration.iceServers)) {
+        throw new Error('The server returned an invalid RTC configuration.');
+    }
+    return configuration;
+}
+
 async function setupWebRTC() {
-    const config = __RTC_CONFIGURATION__;
-    peerConnection = new RTCPeerConnection(config);
-    webrtc_id = Math.random().toString(36).substring(7);
-    const timeoutId = setTimeout(() => {
-        const toast = document.getElementById('error-toast');
-        toast.textContent = "Connection is taking longer than usual. Are you on a VPN?";
-        toast.className = 'toast warning';
-        toast.style.display = 'block';
-        // Hide warning after 5 seconds
-        setTimeout(() => {
-            toast.style.display = 'none';
-        }, 5000);
-    }, 5000);
+    if (isStarting) return;
+    isStarting = true;
+    updateButtonState();
+    let timeoutId;
+    let currentPeerConnection;
+
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+        const config = await fetchRTCConfiguration();
+        currentPeerConnection = new RTCPeerConnection(config);
+        peerConnection = currentPeerConnection;
+        const sessionId = createWebRTCId();
+
+        timeoutId = setTimeout(() => {
+            const toast = document.getElementById('error-toast');
+            toast.textContent = 'Connection is taking longer than expected.';
+            toast.className = 'toast warning';
+            toast.style.display = 'block';
+        }, 5000);
+
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStream.getTracks().forEach(track => currentPeerConnection.addTrack(track, mediaStream));
         if (!audioContext || audioContext.state === 'closed') {
             audioContext = new AudioContext();
         }
@@ -125,7 +147,7 @@ async function setupWebRTC() {
             try { source_input.disconnect(); } catch (e) { console.warn("Error disconnecting previous input source:", e); }
             source_input = null;
         }
-        source_input = audioContext.createMediaStreamSource(stream);
+        source_input = audioContext.createMediaStreamSource(mediaStream);
         analyser_input = audioContext.createAnalyser();
         console.log("analyser_input", analyser_input)
         source_input.connect(analyser_input);
@@ -133,35 +155,52 @@ async function setupWebRTC() {
         dataArray_input = new Uint8Array(analyser_input.frequencyBinCount);
         console.log("dataArray_input", dataArray_input)
         updateAudioLevel();
-        peerConnection.addEventListener('connectionstatechange', () => {
-            console.log('connectionstatechange', peerConnection.connectionState);
-            if (peerConnection.connectionState === 'connected') {
+        currentPeerConnection.addEventListener('connectionstatechange', () => {
+            const state = currentPeerConnection.connectionState;
+            console.log('connectionstatechange', state);
+            if (state === 'connected') {
                 clearTimeout(timeoutId);
+                isStarting = false;
                 const toast = document.getElementById('error-toast');
                 toast.style.display = 'none';
                 if (analyser_input) updateAudioLevel();
                 if (analyser) updateVisualization();
-            } else if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState)) {
-                // Explicitly stop animations if connection drops unexpectedly
-                // Note: stopWebRTC() handles the normal stop case
+            } else if (['disconnected', 'failed', 'closed'].includes(state) && peerConnection === currentPeerConnection) {
+                clearTimeout(timeoutId);
+                isStarting = false;
+                if (state !== 'closed') {
+                    showError('The WebRTC connection was interrupted.');
+                }
+                stopWebRTC(currentPeerConnection);
             }
             updateButtonState();
         });
-        peerConnection.onicecandidate = ({ candidate }) => {
+        currentPeerConnection.onicecandidate = async ({ candidate }) => {
             if (candidate) {
                 console.debug("Sending ICE candidate", candidate);
-                fetch('/webrtc/offer', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        candidate: candidate.toJSON(),
-                        webrtc_id: webrtc_id,
-                        type: "ice-candidate",
-                    })
-                })
+                try {
+                    const response = await fetch('/webrtc/offer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            candidate: candidate.toJSON(),
+                            webrtc_id: sessionId,
+                            type: 'ice-candidate',
+                        })
+                    });
+                    if (!response.ok) {
+                        throw new Error(`ICE candidate request failed (${response.status}).`);
+                    }
+                    const result = await response.json();
+                    if (result.status === 'failed') {
+                        console.warn('ICE candidate rejected:', result.meta?.error);
+                    }
+                } catch (error) {
+                    console.error('Failed to send ICE candidate:', error);
+                }
             }
         };
-        peerConnection.addEventListener('track', (evt) => {
+        currentPeerConnection.addEventListener('track', (evt) => {
             if (evt.track.kind === 'audio' && audioOutput) {
                 if (audioOutput.srcObject !== evt.streams[0]) {
                     audioOutput.srcObject = evt.streams[0];
@@ -184,50 +223,75 @@ async function setupWebRTC() {
                 }
             }
         });
-        dataChannel = peerConnection.createDataChannel('text');
-        dataChannel.onmessage = (event) => {
-            const eventJson = JSON.parse(event.data);
+        dataChannel = currentPeerConnection.createDataChannel('text');
+        dataChannel.onmessage = async (event) => {
+            let eventJson;
+            try {
+                eventJson = JSON.parse(event.data);
+            } catch (error) {
+                console.error('Invalid data-channel message:', error);
+                return;
+            }
             if (eventJson.type === "error") {
                 showError(eventJson.message);
             } else if (eventJson.type === "send_input") {
-                fetch('/input_hook', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        webrtc_id: webrtc_id,
-                        voice_name: voiceSelect.value
-                    })
-                });
+                try {
+                    const response = await fetch('/input_hook', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            webrtc_id: sessionId,
+                            voice_name: voiceSelect.value
+                        })
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Voice selection failed (${response.status}).`);
+                    }
+                } catch (error) {
+                    console.error('Failed to initialize the voice session:', error);
+                    showError('The voice session could not be initialized.');
+                    stopWebRTC(currentPeerConnection);
+                }
             }
         };
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
+        const offer = await currentPeerConnection.createOffer();
+        await currentPeerConnection.setLocalDescription(offer);
         const response = await fetch('/webrtc/offer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                sdp: peerConnection.localDescription.sdp,
-                type: peerConnection.localDescription.type,
-                webrtc_id: webrtc_id,
+                sdp: currentPeerConnection.localDescription.sdp,
+                type: currentPeerConnection.localDescription.type,
+                webrtc_id: sessionId,
             })
         });
+        if (!response.ok) {
+            throw new Error(`WebRTC offer failed (${response.status}).`);
+        }
         const serverResponse = await response.json();
         if (serverResponse.status === 'failed') {
-            showError(serverResponse.meta.error === 'concurrency_limit_reached'
+            const errorCode = serverResponse.meta?.error || 'unknown_error';
+            showError(errorCode === 'concurrency_limit_reached'
                 ? `Too many connections. Maximum limit is ${serverResponse.meta.limit}`
-                : serverResponse.meta.error);
-            stopWebRTC();
+                : errorCode);
+            stopWebRTC(currentPeerConnection);
             startButton.textContent = 'Start Recording';
             return;
         }
-        await peerConnection.setRemoteDescription(serverResponse);
+        await currentPeerConnection.setRemoteDescription(serverResponse);
+        isStarting = false;
+        updateButtonState();
     } catch (err) {
         clearTimeout(timeoutId);
+        isStarting = false;
         console.error('Error setting up WebRTC:', err);
-        showError('Failed to establish connection. Please try again.');
-        stopWebRTC();
+        const message = err?.name === 'NotAllowedError'
+            ? 'Microphone permission was denied. Allow microphone access and try again.'
+            : 'Failed to establish connection. Please try again.';
+        showError(message);
+        stopWebRTC(currentPeerConnection);
         startButton.textContent = 'Start Recording';
     }
 }
@@ -262,7 +326,10 @@ function updateAudioLevel() {
     }
     requestAnimationFrame(updateAudioLevel);
 }
-function stopWebRTC() {
+function stopWebRTC(expectedPeerConnection = null) {
+    if (expectedPeerConnection && peerConnection !== expectedPeerConnection) {
+        return;
+    }
     console.log("Running stopWebRTC");
     if (peerConnection) {
         peerConnection.getSenders().forEach(sender => {
@@ -270,6 +337,7 @@ function stopWebRTC() {
                 sender.track.stop();
             }
         });
+        peerConnection.onicecandidate = null;
         peerConnection.ontrack = null;
         peerConnection.onicegatheringstatechange = null;
         peerConnection.onconnectionstatechange = null;
@@ -293,23 +361,21 @@ function stopWebRTC() {
         try { source_output.disconnect(); } catch (e) { console.warn("Error disconnecting output source:", e); }
         source_output = null;
     }
-    if (audioContext && audioContext.state !== 'closed') {
-        audioContext.close().then(() => {
+    const contextToClose = audioContext;
+    audioContext = null;
+    if (contextToClose && contextToClose.state !== 'closed') {
+        contextToClose.close().then(() => {
             console.log("AudioContext closed successfully.");
-            audioContext = null;
         }).catch(e => {
             console.error("Error closing AudioContext:", e);
-            audioContext = null;
         });
-    } else {
-        audioContext = null;
     }
     analyser_input = null;
     dataArray_input = null;
     analyser = null;
     dataArray = null;
     isMuted = false;
-    isRecording = false;
+    isStarting = false;
     updateButtonState();
     const bars = document.querySelectorAll('.box');
     bars.forEach(bar => bar.style.transform = 'scaleY(0.1)');
@@ -328,8 +394,6 @@ startButton.addEventListener('click', (event) => {
     } else if (!peerConnection || ['new', 'closed', 'failed', 'disconnected'].includes(peerConnection.connectionState)) {
         console.log("Start button clicked");
         setupWebRTC();
-        isRecording = true;
-        updateButtonState();
     }
 });
 updateButtonState();
