@@ -1,0 +1,66 @@
+# ---- Secrets & configuration locale ----
+.env
+env
+*.env
+!.env.example
+
+# Certificats / clés TLS — NE JAMAIS COMMITER
+ssl/
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+ENV/
+
+# Outils
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Notebooks ----
+.ipynb_checkpoints/
+
+# ---- Éditeurs / IDE ----
+.vscode/*
+!.vscode/settings.json
+.idea/
+
+# ---- OS ----
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+__MACOSX/
+Thumbs.db
+desktop.ini
+
+# ---- Archives & artefacts lourds ----
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# ---- Sorties audio générées ----
+*.wav
+*.mp3
+output/
+recordings/
