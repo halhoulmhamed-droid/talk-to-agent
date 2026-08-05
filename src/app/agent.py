@@ -5,7 +5,6 @@ import os
 import io
 import uvicorn
 from pathlib import Path
-import ssl
 from typing import AsyncGenerator, Literal
 import configparser
 from scipy.io.wavfile import write
@@ -43,14 +42,16 @@ from google.genai.types import (
 from gradio.utils import get_space
 from pydantic import BaseModel
 
-current_dir = Path(__file__).parent.parent
-config_prompt = configparser.ConfigParser()
-config_prompt.read("config.ini")
-prompt_file = config_prompt["PROMPT"]["PROMPT_INTERVIEWER_A"]
-with open(prompt_file, "r") as file:
-    prompt = " ".join(line.rstrip() for line in file)
+current_dir = Path(__file__).resolve().parent.parent
+project_root = current_dir.parent
 
-load_dotenv()
+load_dotenv(project_root / ".env")
+
+config_prompt = configparser.ConfigParser()
+config_prompt.read(project_root / "config.ini", encoding="utf-8")
+prompt_file = project_root / config_prompt["PROMPT"]["PROMPT_INTERVIEWER_A"]
+with open(prompt_file, "r", encoding="utf-8") as file:
+    prompt = " ".join(line.rstrip() for line in file)
 
 
 class Transcript(Enum):
@@ -200,10 +201,20 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory=current_dir / "static"), name="static_file")
 
-ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-app_pem = os.getenv("APP_PEM")
-app_key = os.getenv("APP_KEY")
-ssl_context.load_cert_chain(app_pem, app_key)
+
+def _resolve_cert(env_var: str) -> str | None:
+    """Résout un chemin de certificat relatif à la racine du projet."""
+    value = os.getenv(env_var)
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        path = project_root / path
+    return str(path) if path.exists() else None
+
+
+app_pem = _resolve_cert("APP_PEM")
+app_key = _resolve_cert("APP_KEY")
 
 stream.mount(app)
 
@@ -221,16 +232,22 @@ async def index():
         if get_space()
         else os.getenv("RTC_CONFIGURATION")
     )
-    html_content = (current_dir / "template/index.html").read_text()
+    html_content = (current_dir / "template/index.html").read_text(encoding="utf-8")
     html_content = html_content.replace("__RTC_CONFIGURATION__", json.dumps(rtc_config))
     return HTMLResponse(content=html_content)
 
 
 if __name__ == "__main__":
+    if not (app_pem and app_key):
+        print(
+            "[WARN] Certificat TLS introuvable (APP_PEM / APP_KEY) : démarrage en HTTP. "
+            "Le micro ne sera accessible que via localhost."
+        )
+
     uvicorn.run(
         app,
-        host="192.168.1.11",
-        port=7860,
+        host=os.getenv("APP_HOST", "0.0.0.0"),
+        port=int(os.getenv("APP_PORT", "7860")),
         ssl_keyfile=app_key,
         ssl_certfile=app_pem,
     )

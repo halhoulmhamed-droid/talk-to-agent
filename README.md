@@ -56,27 +56,29 @@ cp .env.example .env
 
 puis renseignez les valeurs.
 
-| Variable | Description |
-|---|---|
-| `GEMINI_API_KEY` | Clé API Google AI Studio |
-| `APP_PEM` | Chemin du certificat TLS |
-| `APP_KEY` | Chemin de la clé privée TLS |
-| `RTC_CONFIGURATION` | Configuration ICE/STUN (JSON), optionnelle en local |
+| Variable | Défaut | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | — | Clé API Google AI Studio |
+| `APP_PEM` | `ssl/app.pem` | Certificat TLS (chemin relatif à la racine du projet) |
+| `APP_KEY` | `ssl/app.key` | Clé privée TLS |
+| `APP_HOST` | `0.0.0.0` | Adresse d'écoute |
+| `APP_PORT` | `7860` | Port d'écoute |
+| `RTC_CONFIGURATION` | — | Configuration ICE/STUN (JSON), optionnelle en local |
 
 ## Lancement
-
-Depuis la **racine du projet** (`config.ini` est résolu par rapport au répertoire courant) :
 
 ```bash
 python src/app/agent.py
 ```
 
-L'application écoute sur le port `7860` en HTTPS. Le certificat étant auto-signé,
-le navigateur affichera un avertissement à accepter.
+Les chemins (`config.ini`, prompts, `.env`, certificats) sont résolus par rapport à la
+racine du projet : le script peut être lancé depuis n'importe quel répertoire.
 
-> **Note :** l'adresse d'écoute et les URL des ressources statiques sont actuellement
-> codées en dur sur `192.168.1.11:7860` (dans `agent.py` et `index.html`). Adaptez-les
-> à votre réseau, ou remplacez-les par `0.0.0.0` et des chemins relatifs.
+L'application écoute sur <https://localhost:7860>. Le certificat étant auto-signé, le
+navigateur affichera un avertissement à accepter.
+
+> Si `APP_PEM`/`APP_KEY` sont absents, le serveur démarre en **HTTP** et affiche un
+> avertissement : le micro ne sera alors accessible que via `localhost`.
 
 ## Choix du workflow d'entretien
 
