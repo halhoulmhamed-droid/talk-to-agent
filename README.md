@@ -1,3 +1,15 @@
+---
+title: Talk To Agent
+emoji: 🎙️
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 5.42.0
+app_file: app.py
+pinned: false
+---
+
+
 # Talk-to-Agent
 
 Talk-to-Agent is a local realtime voice demo that connects a browser microphone to Google's Gemini Live API through a Python backend and WebRTC.
