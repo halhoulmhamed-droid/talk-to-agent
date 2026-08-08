@@ -111,6 +111,13 @@ def load_rtc_configuration() -> dict:
 rtc_configuration = load_rtc_configuration()
 
 
+def select_rtc_configuration():
+    """Use Cloudflare TURN on Spaces or whenever HF_TOKEN is configured."""
+    if get_space() or os.getenv("HF_TOKEN", "").strip():
+        return get_cloudflare_turn_credentials_async
+    return rtc_configuration
+
+
 class GeminiHandler(AsyncStreamHandler):
     """Handler for the Gemini API"""
 
@@ -240,9 +247,7 @@ stream = Stream(
     modality="audio",
     mode="send-receive",
     handler=GeminiHandler(),
-    rtc_configuration=(
-        get_cloudflare_turn_credentials_async if get_space() else rtc_configuration
-    ),
+    rtc_configuration=select_rtc_configuration(),
     concurrency_limit=5,
     time_limit=90 if get_space() else LOCAL_SESSION_TIME_LIMIT_SECONDS,
 )
@@ -331,9 +336,10 @@ async def set_voice(body: InputData):
 
 @app.get("/config/rtc")
 async def rtc_config():
-    if get_space():
-        return await get_cloudflare_turn_credentials_async()
-    return rtc_configuration
+    selected_configuration = select_rtc_configuration()
+    if callable(selected_configuration):
+        return await selected_configuration()
+    return selected_configuration
 
 
 @app.get("/")

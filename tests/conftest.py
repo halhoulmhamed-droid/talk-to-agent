@@ -8,6 +8,7 @@ import pytest
 
 SENSITIVE_ENV_VARS = (
     "GEMINI_API_KEY",
+    "HF_TOKEN",
     "APP_PEM",
     "APP_KEY",
     "RTC_CONFIGURATION",
